@@ -67,10 +67,15 @@ def test_fred_connection(api_key):
 
 
 def fetch_fred_data(api_key, indicators, start_date, end_date):
-    """Fetch multiple FRED indicators"""
+    """
+    Fetch multiple FRED indicators
+    Falls back to synthetic data if FRED API fails
+    """
     
     base_url = "https://api.stlouisfed.org/fred/series/observations"
     combined_data = None
+    fred_successful = False
+    fred_errors = []
     
     for indicator_name, series_id in indicators.items():
         try:
@@ -101,11 +106,55 @@ def fetch_fred_data(api_key, indicators, start_date, end_date):
                         combined_data = df
                     else:
                         combined_data = combined_data.merge(df, on='date', how='inner')
+                    
+                    fred_successful = True
         
         except Exception as e:
-            st.warning(f"⚠️  Could not fetch {indicator_name}: {str(e)}")
+            fred_errors.append(f"{indicator_name}: {str(e)}")
+    
+    # If FRED API failed or returned no data, use synthetic USA data
+    if combined_data is None or len(combined_data) == 0:
+        st.warning("⚠️ FRED API unavailable - Using synthetic USA economic data for demo")
+        combined_data = fetch_usa_synthetic_data(indicators, start_date, end_date)
     
     return combined_data
+
+
+def fetch_usa_synthetic_data(indicators, start_date, end_date):
+    """
+    Generate synthetic USA economic data
+    Used when FRED API is unavailable
+    """
+    import pandas as pd
+    from datetime import datetime
+    
+    # Generate monthly date range
+    date_range = pd.date_range(start=start_date, end=end_date, freq='MS')
+    
+    # Generate synthetic data based on realistic USA patterns
+    np.random.seed(42)
+    n_periods = len(date_range)
+    
+    data = {'date': date_range}
+    
+    # Synthetic USA indicators with realistic patterns
+    if 'GDP' in indicators:
+        data['GDP'] = 20000 + np.cumsum(np.random.randn(n_periods) * 100) + np.arange(n_periods) * 5
+    
+    if 'Unemployment' in indicators:
+        data['Unemployment'] = 4.5 + np.random.randn(n_periods) * 0.8 + np.sin(np.arange(n_periods) / 24) * 1.0
+    
+    if 'Inflation' in indicators:
+        data['Inflation'] = 2.5 + np.random.randn(n_periods) * 0.6 + np.sin(np.arange(n_periods) / 20) * 1.2
+    
+    if 'Interest_Rate' in indicators:
+        data['Interest_Rate'] = 2.5 + np.random.randn(n_periods) * 0.5 + np.sin(np.arange(n_periods) / 18) * 1.5
+    
+    if 'Industrial_Production' in indicators:
+        data['Industrial_Production'] = 110 + np.cumsum(np.random.randn(n_periods) * 1.5) + np.arange(n_periods) * 0.3
+    
+    df = pd.DataFrame(data)
+    return df
 
 
 def fetch_india_synthetic_data(indicators, start_date, end_date):
@@ -390,7 +439,14 @@ def tab_data_fetching():
                     st.session_state.data_loaded = True
                     
                     progress_bar.progress(100)
-                    status_text.success(f"✅ {country} data fetched successfully!")
+                    status_text.success(f"✅ {country} data loaded successfully!")
+                    
+                    # Show data source info
+                    st.markdown("---")
+                    if country == "USA":
+                        st.info("📊 **Data Source:** FRED API (Federal Reserve) or Synthetic Fallback")
+                    else:
+                        st.info("📊 **Data Source:** Synthetic Economic Data (Demo)")
                     
                     # Show data info - using MetricsDisplay component
                     st.markdown("---")
