@@ -306,14 +306,27 @@ def tab_data_fetching():
     
     with col1:
         st.markdown("### 📋 Select Indicators")
+        st.info("**ℹ️ GDP is mandatory (required for forecasting)**")
+        
         selected_indicators = {}
         
         for indicator, series_id in available_indicators.items():
-            if st.checkbox(indicator, value=True, key=f"indicator_{indicator}_{country}"):
+            if indicator == 'GDP':
+                # GDP is mandatory - always checked, disabled
+                st.checkbox(
+                    f"**{indicator}** ✅ (Mandatory)",
+                    value=True,
+                    disabled=True,
+                    key=f"indicator_{indicator}_{country}"
+                )
                 selected_indicators[indicator] = series_id
+            else:
+                # Other indicators are optional
+                if st.checkbox(indicator, value=True, key=f"indicator_{indicator}_{country}"):
+                    selected_indicators[indicator] = series_id
         
-        if not selected_indicators:
-            st.error("❌ Please select at least one indicator")
+        if len(selected_indicators) < 1:
+            st.error("❌ GDP is required for forecasting")
     
     with col2:
         st.markdown("### 📅 Set Time Period")
@@ -341,8 +354,8 @@ def tab_data_fetching():
     
     if st.button("🔄 Fetch Data", use_container_width=True, type="primary"):
         
-        if not selected_indicators:
-            st.error("❌ Please select at least one indicator")
+        if 'GDP' not in selected_indicators:
+            st.error("❌ GDP is required for forecasting")
         else:
             
             progress_bar = st.progress(0)
