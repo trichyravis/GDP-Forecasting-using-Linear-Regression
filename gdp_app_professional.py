@@ -1,3 +1,4 @@
+
 # 📊 GDP FORECASTING APP - Using Professional Design Template
 """
 Complete GDP Forecasting Application
@@ -35,6 +36,76 @@ from components import (
     DataDisplay
 )
 from config import PAGE_CONFIG, COLORS, THEME
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS - DEFINED FIRST (BEFORE THEY'RE CALLED)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def test_fred_connection(api_key):
+    """Test FRED API connection"""
+    try:
+        params = {
+            'series_id': 'UNRATE',
+            'api_key': api_key,
+            'file_type': 'json',
+            'limit': 1
+        }
+        
+        response = requests.get(
+            "https://api.stlouisfed.org/fred/series/observations",
+            params=params,
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            return True, "✅ API connection successful!"
+        else:
+            return False, f"❌ API Error {response.status_code}"
+    
+    except Exception as e:
+        return False, f"❌ Connection error: {str(e)}"
+
+
+def fetch_fred_data(api_key, indicators, start_date, end_date):
+    """Fetch multiple FRED indicators"""
+    
+    base_url = "https://api.stlouisfed.org/fred/series/observations"
+    combined_data = None
+    
+    for indicator_name, series_id in indicators.items():
+        try:
+            params = {
+                'series_id': series_id,
+                'api_key': api_key,
+                'file_type': 'json',
+                'observation_start': start_date,
+                'observation_end': end_date
+            }
+            
+            response = requests.get(base_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                observations = data.get('observations', [])
+                
+                if observations:
+                    df = pd.DataFrame(observations)
+                    df['date'] = pd.to_datetime(df['date'])
+                    df['value'] = pd.to_numeric(df['value'], errors='coerce')
+                    df = df.dropna(subset=['value'])
+                    
+                    df.rename(columns={'value': indicator_name}, inplace=True)
+                    df = df[['date', indicator_name]]
+                    
+                    if combined_data is None:
+                        combined_data = df
+                    else:
+                        combined_data = combined_data.merge(df, on='date', how='inner')
+        
+        except Exception as e:
+            st.warning(f"⚠️  Could not fetch {indicator_name}: {str(e)}")
+    
+    return combined_data
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE CONFIGURATION - Using Template Config
@@ -632,73 +703,3 @@ Footer.render(
     },
     disclaimer="This tool is for educational purposes. Always consult financial professionals before making investment decisions."
 )
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# HELPER FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def test_fred_connection(api_key):
-    """Test FRED API connection"""
-    try:
-        params = {
-            'series_id': 'UNRATE',
-            'api_key': api_key,
-            'file_type': 'json',
-            'limit': 1
-        }
-        
-        response = requests.get(
-            "https://api.stlouisfed.org/fred/series/observations",
-            params=params,
-            timeout=5
-        )
-        
-        if response.status_code == 200:
-            return True, "✅ API connection successful!"
-        else:
-            return False, f"❌ API Error {response.status_code}"
-    
-    except Exception as e:
-        return False, f"❌ Connection error: {str(e)}"
-
-
-def fetch_fred_data(api_key, indicators, start_date, end_date):
-    """Fetch multiple FRED indicators"""
-    
-    base_url = "https://api.stlouisfed.org/fred/series/observations"
-    combined_data = None
-    
-    for indicator_name, series_id in indicators.items():
-        try:
-            params = {
-                'series_id': series_id,
-                'api_key': api_key,
-                'file_type': 'json',
-                'observation_start': start_date,
-                'observation_end': end_date
-            }
-            
-            response = requests.get(base_url, params=params, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                observations = data.get('observations', [])
-                
-                if observations:
-                    df = pd.DataFrame(observations)
-                    df['date'] = pd.to_datetime(df['date'])
-                    df['value'] = pd.to_numeric(df['value'], errors='coerce')
-                    df = df.dropna(subset=['value'])
-                    
-                    df.rename(columns={'value': indicator_name}, inplace=True)
-                    df = df[['date', indicator_name]]
-                    
-                    if combined_data is None:
-                        combined_data = df
-                    else:
-                        combined_data = combined_data.merge(df, on='date', how='inner')
-        
-        except Exception as e:
-            st.warning(f"⚠️  Could not fetch {indicator_name}: {str(e)}")
-    
-    return combined_data
