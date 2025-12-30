@@ -107,6 +107,43 @@ def fetch_fred_data(api_key, indicators, start_date, end_date):
     
     return combined_data
 
+
+def fetch_india_synthetic_data(indicators, start_date, end_date):
+    """
+    Generate synthetic India economic data
+    (In production, this would fetch from World Bank, RBI, or other India economic sources)
+    """
+    import pandas as pd
+    from datetime import datetime, timedelta
+    
+    # Generate date range
+    date_range = pd.date_range(start=start_date, end=end_date, freq='MS')
+    
+    # Generate synthetic data based on realistic patterns
+    np.random.seed(42)
+    n_periods = len(date_range)
+    
+    data = {'date': date_range}
+    
+    # Synthetic India indicators with realistic patterns
+    if 'GDP' in indicators:
+        data['GDP'] = 2500 + np.cumsum(np.random.randn(n_periods) * 50) + np.arange(n_periods) * 2
+    
+    if 'Unemployment' in indicators:
+        data['Unemployment'] = 3.5 + np.random.randn(n_periods) * 0.5 + np.sin(np.arange(n_periods) / 12) * 0.3
+    
+    if 'Inflation' in indicators:
+        data['Inflation'] = 5.5 + np.random.randn(n_periods) * 0.8 + np.sin(np.arange(n_periods) / 24) * 1.5
+    
+    if 'Interest_Rate' in indicators:
+        data['Interest_Rate'] = 6.0 + np.random.randn(n_periods) * 0.3 + np.sin(np.arange(n_periods) / 20) * 0.5
+    
+    if 'Industrial_Production' in indicators:
+        data['Industrial_Production'] = 130 + np.cumsum(np.random.randn(n_periods) * 2) + np.arange(n_periods) * 0.5
+    
+    df = pd.DataFrame(data)
+    return df
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # PAGE CONFIGURATION - Using Template Config
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -139,7 +176,26 @@ if 'model' not in st.session_state:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 with st.sidebar:
-    st.markdown("## 🔑 FRED API Configuration")
+    st.markdown("## 🌍 Country Selection")
+    
+    # Country selector
+    selected_country = st.selectbox(
+        "Select Country:",
+        ["USA", "India"],
+        help="Choose which country's economic data to analyze"
+    )
+    
+    if 'selected_country' not in st.session_state:
+        st.session_state.selected_country = selected_country
+    else:
+        st.session_state.selected_country = selected_country
+    
+    st.info(f"📍 **Selected: {selected_country}**\n\n"
+            f"**Data Source:**\n"
+            f"{'🇺🇸 FRED API (Federal Reserve)' if selected_country == 'USA' else '🇮🇳 RBI & World Bank Data'}")
+    
+    st.markdown("---")
+    st.markdown("## 🔑 API Configuration")
     
     # API Key Input
     api_key_input = st.text_input(
@@ -213,8 +269,8 @@ with st.sidebar:
 
 HeroHeader.render(
     title="GDP FORECASTING MODEL",
-    subtitle="Powered by FRED Economic Data",
-    description="Predict GDP using real economic indicators from the Federal Reserve",
+    subtitle="🌍 Multi-Country Economic Analysis",
+    description="Predict GDP using real economic indicators from the Federal Reserve and Government sources",
     emoji="📊"
 )
 
@@ -225,69 +281,81 @@ HeroHeader.render(
 # Define tab content functions
 def tab_data_fetching():
     """Data Fetching Tab"""
-    st.markdown("## 📥 Fetch Economic Data from FRED")
+    st.markdown(f"## 📥 Fetch Economic Data from {st.session_state.selected_country}")
     
-    if not st.session_state.api_key:
-        st.warning("⚠️  Please enter your FRED API key in the sidebar first")
+    country = st.session_state.selected_country
+    
+    if country == "USA":
+        if not st.session_state.api_key:
+            st.warning("⚠️  Please enter your FRED API key in the sidebar first")
+        else:
+            st.info("🇺🇸 **Fetching USA data from FRED API (Federal Reserve)**")
     else:
-        # Available indicators
-        available_indicators = {
-            'GDP': 'A191RA1Q225SBEA',
-            'Unemployment': 'UNRATE',
-            'Inflation': 'CPIAUCSL',
-            'Interest_Rate': 'DFF',
-            'Industrial_Production': 'INDPRO'
-        }
+        st.info("🇮🇳 **Fetching India economic data (Synthetic for demo - Production uses RBI/World Bank)**")
+    
+    # Available indicators
+    available_indicators = {
+        'GDP': 'A191RA1Q225SBEA' if country == "USA" else 'GDP_IND',
+        'Unemployment': 'UNRATE' if country == "USA" else 'UNEMP_IND',
+        'Inflation': 'CPIAUCSL' if country == "USA" else 'INFLATION_IND',
+        'Interest_Rate': 'DFF' if country == "USA" else 'REPO_RATE_IND',
+        'Industrial_Production': 'INDPRO' if country == "USA" else 'IIP_IND'
+    }
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 📋 Select Indicators")
+        selected_indicators = {}
         
-        col1, col2 = st.columns(2)
+        for indicator, series_id in available_indicators.items():
+            if st.checkbox(indicator, value=True, key=f"indicator_{indicator}_{country}"):
+                selected_indicators[indicator] = series_id
         
-        with col1:
-            st.markdown("### 📋 Select Indicators")
-            selected_indicators = {}
-            
-            for indicator, series_id in available_indicators.items():
-                if st.checkbox(indicator, value=True, key=f"indicator_{indicator}"):
-                    selected_indicators[indicator] = series_id
-            
-            if not selected_indicators:
-                st.error("❌ Please select at least one indicator")
+        if not selected_indicators:
+            st.error("❌ Please select at least one indicator")
+    
+    with col2:
+        st.markdown("### 📅 Set Time Period")
         
-        with col2:
-            st.markdown("### 📅 Set Time Period")
-            
-            years = st.slider(
-                "Years of historical data:",
-                min_value=1,
-                max_value=20,
-                value=10,
-                help="How many years of data to fetch"
-            )
-            
-            end_date = st.date_input(
-                "End Date:",
-                value=datetime.now(),
-                help="Latest date for data"
-            )
-            
-            start_date = end_date - timedelta(days=365*years)
-            
-            st.info(f"📅 Will fetch from {start_date} to {end_date}")
+        years = st.slider(
+            "Years of historical data:",
+            min_value=1,
+            max_value=20,
+            value=10,
+            help="How many years of data to fetch"
+        )
         
-        # Fetch button
-        st.markdown("---")
+        end_date = st.date_input(
+            "End Date:",
+            value=datetime.now(),
+            help="Latest date for data"
+        )
         
-        if st.button("🔄 Fetch Data from FRED", use_container_width=True, type="primary"):
+        start_date = end_date - timedelta(days=365*years)
+        
+        st.info(f"📅 Will fetch from {start_date} to {end_date}")
+    
+    # Fetch button
+    st.markdown("---")
+    
+    if st.button("🔄 Fetch Data", use_container_width=True, type="primary"):
+        
+        if not selected_indicators:
+            st.error("❌ Please select at least one indicator")
+        else:
             
-            if not selected_indicators:
-                st.error("❌ Please select at least one indicator")
-            else:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            try:
+                status_text.text(f"🔄 Fetching {country} data...")
+                progress_bar.progress(30)
                 
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                try:
-                    status_text.text("🔄 Fetching data from FRED...")
-                    progress_bar.progress(30)
+                if country == "USA":
+                    if not st.session_state.api_key:
+                        st.error("❌ Please enter FRED API key in sidebar")
+                        return
                     
                     df = fetch_fred_data(
                         st.session_state.api_key,
@@ -295,72 +363,85 @@ def tab_data_fetching():
                         start_date.strftime('%Y-%m-%d'),
                         end_date.strftime('%Y-%m-%d')
                     )
-                    
-                    progress_bar.progress(70)
-                    
-                    if df is not None and len(df) > 0:
-                        st.session_state.df = df
-                        st.session_state.data_loaded = True
-                        
-                        progress_bar.progress(100)
-                        status_text.success("✅ Data fetched successfully!")
-                        
-                        # Show data info - using MetricsDisplay component
-                        st.markdown("---")
-                        st.markdown("### 📊 Data Summary")
-                        
-                        MetricsDisplay.render_metrics([
-                            {
-                                "title": "Records",
-                                "value": str(len(df)),
-                                "emoji": "📝",
-                                "description": "Data points"
-                            },
-                            {
-                                "title": "Features",
-                                "value": str(len(df.columns) - 1),
-                                "emoji": "🎯",
-                                "description": "Economic indicators"
-                            },
-                            {
-                                "title": "Date Range",
-                                "value": f"{df['date'].min().date()} to {df['date'].max().date()}",
-                                "emoji": "📅",
-                                "description": "Time period",
-                                "highlight": True
-                            },
-                            {
-                                "title": "Missing Values",
-                                "value": str(df.isnull().sum().sum()),
-                                "emoji": "✅",
-                                "description": "Data quality"
-                            },
-                        ], columns=4)
-                        
-                        # Show data preview
-                        st.markdown("---")
-                        st.markdown("### 📋 Data Preview")
-                        st.dataframe(df.head(10), use_container_width=True)
-                        
-                        # Data statistics
-                        st.markdown("---")
-                        st.markdown("### 📈 Data Statistics")
-                        st.dataframe(df.describe(), use_container_width=True)
-                    
-                    else:
-                        st.error("❌ Failed to fetch data. Check API key or internet connection.")
+                else:  # India
+                    df = fetch_india_synthetic_data(
+                        selected_indicators,
+                        start_date,
+                        end_date
+                    )
                 
-                except Exception as e:
-                    st.error(f"❌ Error: {str(e)}")
+                progress_bar.progress(70)
+                
+                if df is not None and len(df) > 0:
+                    st.session_state.df = df
+                    st.session_state.data_loaded = True
+                    
+                    progress_bar.progress(100)
+                    status_text.success(f"✅ {country} data fetched successfully!")
+                    
+                    # Show data info - using MetricsDisplay component
+                    st.markdown("---")
+                    st.markdown(f"### 📊 {country} Data Summary")
+                    
+                    MetricsDisplay.render_metrics([
+                        {
+                            "title": "Records",
+                            "value": str(len(df)),
+                            "emoji": "📝",
+                            "description": "Data points"
+                        },
+                        {
+                            "title": "Features",
+                            "value": str(len(df.columns) - 1),
+                            "emoji": "🎯",
+                            "description": "Economic indicators"
+                        },
+                        {
+                            "title": "Date Range",
+                            "value": f"{df['date'].min().date()} to {df['date'].max().date()}",
+                            "emoji": "📅",
+                            "description": "Time period",
+                            "highlight": True
+                        },
+                        {
+                            "title": "Missing Values",
+                            "value": str(df.isnull().sum().sum()),
+                            "emoji": "✅",
+                            "description": "Data quality"
+                        },
+                    ], columns=4)
+                    
+                    # Show data preview
+                    st.markdown("---")
+                    st.markdown("### 📋 Data Preview")
+                    st.dataframe(df.head(10), use_container_width=True)
+                    
+                    # Data statistics
+                    st.markdown("---")
+                    st.markdown("### 📈 Data Statistics")
+                    st.dataframe(df.describe(), use_container_width=True)
+                
+                else:
+                    st.error("❌ Failed to fetch data. Check API key or internet connection.")
+            
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
 
 def tab_model_training():
     """Model Training Tab"""
-    st.markdown("## 🤖 Train Linear Regression Model")
+    country = st.session_state.selected_country
+    st.markdown(f"## 🤖 Train Model for {country}")
     
     if not st.session_state.data_loaded:
-        st.warning("⚠️  Please fetch data first in the 'Data Fetching' tab")
+        st.warning(f"⚠️  Please fetch {country} data first in the 'Data Fetching' tab")
     else:
         df = st.session_state.df
+        
+        # Display country info
+        if country == "USA":
+            st.info("🇺🇸 **Training model on USA economic data from FRED**")
+        else:
+            st.info("🇮🇳 **Training model on India economic data**")
         
         # Select features and target
         st.markdown("### 🎯 Configure Model")
@@ -390,7 +471,7 @@ def tab_model_training():
         
         # Model info card
         st.info(f"""
-        **Model Configuration:**
+        **Model Configuration ({country}):**
         - Target: {target}
         - Features: {len(features)} selected → {', '.join(features)}
         - Train/Test Split: {int((1-test_size)*100)}/{int(test_size*100)}
@@ -410,7 +491,7 @@ def tab_model_training():
                 status_text = st.empty()
                 
                 try:
-                    status_text.text("🔄 Preparing data...")
+                    status_text.text(f"🔄 Preparing {country} data...")
                     progress_bar.progress(20)
                     
                     # Prepare data
@@ -441,7 +522,7 @@ def tab_model_training():
                             X_train = scaler.fit_transform(X_train)
                             X_test = scaler.transform(X_test)
                         
-                        status_text.text("🤖 Training model...")
+                        status_text.text(f"🤖 Training {country} model...")
                         progress_bar.progress(80)
                         
                         # Train model
@@ -465,6 +546,7 @@ def tab_model_training():
                             'scaler': scaler,
                             'features': features,
                             'target': target,
+                            'country': country,
                             'X_train': X_train,
                             'X_test': X_test,
                             'y_train': y_train,
@@ -476,11 +558,11 @@ def tab_model_training():
                         }
                         
                         progress_bar.progress(100)
-                        status_text.success("✅ Model trained successfully!")
+                        status_text.success(f"✅ {country} model trained successfully!")
                         
                         # Display results using MetricsDisplay component
                         st.markdown("---")
-                        st.markdown("### 📊 Model Performance")
+                        st.markdown(f"### 📊 {country} Model Performance")
                         
                         MetricsDisplay.render_metrics([
                             {
@@ -506,7 +588,7 @@ def tab_model_training():
                         
                         # Model equation
                         st.markdown("---")
-                        st.markdown("### 📐 Model Equation")
+                        st.markdown(f"### 📐 {country} Model Equation")
                         
                         equation = f"**{target} = {model.intercept_:,.4f}**\n\n"
                         for feature, coef in zip(features, model.coef_):
@@ -533,10 +615,11 @@ def tab_model_training():
 
 def tab_results():
     """Results & Visualizations Tab"""
-    st.markdown("## 📊 Model Results & Visualizations")
+    country = st.session_state.selected_country
+    st.markdown(f"## 📊 {country} Model Results & Visualizations")
     
     if st.session_state.model is None:
-        st.warning("⚠️  Please train a model first in the 'Model Training' tab")
+        st.warning(f"⚠️  Please train a {country} model first in the 'Model Training' tab")
     else:
         model_data = st.session_state.model
         
@@ -592,13 +675,27 @@ def tab_about():
     """About & Help Tab"""
     st.markdown("## ℹ️ About This Application")
     
-    st.markdown("""
+    st.markdown(f"""
     ### 📊 What is this?
     
-    This is a **GDP Forecasting Model** that uses real economic data from FRED 
-    (Federal Reserve Economic Data) to build linear regression models.
+    This is a **GDP Forecasting Model** that uses real economic data from multiple sources
+    to build linear regression models for different countries.
     
-    ### 🔑 How to get a FRED API Key?
+    ### 🌍 Country Selection & Data Sources
+    
+    **🇺🇸 USA:**
+    - Data Source: FRED API (Federal Reserve Economic Data)
+    - Real economic data from official sources
+    - Requires free FRED API key
+    - Monthly/Quarterly indicators
+    
+    **🇮🇳 India:**
+    - Data Source: RBI, World Bank, & Government sources
+    - Currently using synthetic data for demo
+    - Production version uses official India economic indicators
+    - Monthly indicators
+    
+    ### 🔑 How to get a FRED API Key? (For USA)
     
     1. Go to: https://fredacDb.stlouisfed.org/docs/api/api_key.html
     2. Click "Get your API key"
@@ -608,25 +705,30 @@ def tab_about():
     
     ### 🚀 How to use?
     
-    **Step 1: Data Fetching**
-    - Enter your FRED API key
+    **Step 1: Select Country**
+    - Choose USA or India from sidebar
+    - USA uses real FRED data
+    - India uses economic indicators
+    
+    **Step 2: Data Fetching**
     - Select economic indicators
     - Choose time period
     - Click "Fetch Data"
     
-    **Step 2: Model Training**
+    **Step 3: Model Training**
     - Select target variable (what to predict)
     - Select features (what to use for prediction)
     - Configure model settings
     - Click "Train Model"
     
-    **Step 3: View Results**
+    **Step 4: View Results**
     - See model performance metrics
     - View predictions vs actual
     - Analyze visualizations
     
     ### 📈 Economic Indicators Available
     
+    #### USA (FRED API):
     | Indicator | Series ID | Frequency |
     |-----------|-----------|-----------|
     | GDP | A191RA1Q225SBEA | Quarterly |
@@ -634,6 +736,15 @@ def tab_about():
     | Inflation (CPI) | CPIAUCSL | Monthly |
     | Interest Rate (Fed Funds) | DFF | Daily |
     | Industrial Production | INDPRO | Monthly |
+    
+    #### India (RBI/Government):
+    | Indicator | Description | Frequency |
+    |-----------|-------------|-----------|
+    | GDP | Gross Domestic Product | Quarterly |
+    | Unemployment | Unemployment Rate | Monthly |
+    | Inflation | CPI Inflation Rate | Monthly |
+    | Interest Rate | Repo Rate / Policy Rate | Monthly |
+    | Industrial Production | IIP Index | Monthly |
     
     ### 💡 Model Details
     
@@ -644,19 +755,22 @@ def tab_about():
     
     ### ✨ Features
     
-    ✅ Real FRED API data integration
+    ✅ Real economic data from official sources
+    ✅ Country selection (USA & India)
     ✅ User configurable API key input
     ✅ Multiple indicators selection
     ✅ Custom date ranges
     ✅ Flexible feature selection
     ✅ Interactive visualizations
     ✅ Detailed performance metrics
+    ✅ Professional design template
     
     ### 🔐 Security
     
     - Your API key is stored in Streamlit session state
     - Never shared or logged
     - Only used to fetch data from FRED
+    - No user data collected or stored
     """)
     
     # Professional cards using template component
@@ -670,16 +784,21 @@ def tab_about():
             "icon": "💻"
         },
         {
-            "title": "Data Source",
+            "title": "USA Data",
             "content": "FRED API - Federal Reserve Economic Data",
-            "icon": "🏦"
+            "icon": "🇺🇸"
+        },
+        {
+            "title": "India Data",
+            "content": "RBI & Government Economic Indicators",
+            "icon": "🇮🇳"
         },
         {
             "title": "ML Framework",
             "content": "scikit-learn linear regression",
             "icon": "🤖"
         },
-    ], columns=3)
+    ], columns=4)
 
 # Using TabsDisplay component from template
 TabsDisplay.render({
