@@ -239,35 +239,65 @@ with st.sidebar:
     else:
         st.session_state.selected_country = selected_country
     
-    st.info(f"📍 **Selected: {selected_country}**\n\n"
-            f"**Data Source:**\n"
-            f"{'🇺🇸 FRED API (Federal Reserve)' if selected_country == 'USA' else '🇮🇳 RBI & World Bank Data'}")
+    st.info(f"📍 **Selected: {selected_country}**")
+    
+    st.markdown("---")
+    
+    # Data Source Selection
+    st.markdown("## 📊 Data Source Selection")
+    
+    if selected_country == "USA":
+        data_source = st.radio(
+            "Choose Data Source:",
+            ["🤖 Synthetic Data (Demo)", "🏦 FRED API (Real Data)"],
+            help="Synthetic: Demo data without API key | FRED API: Real Federal Reserve data"
+        )
+        use_fred = "FRED API" in data_source
+        
+        if use_fred:
+            st.info("🏦 **Using Real FRED API Data**\n\nYou'll need a FRED API key")
+        else:
+            st.info("🤖 **Using Synthetic USA Data**\n\nNo API key needed - Perfect for testing!")
+        
+        st.session_state.use_fred_api = use_fred
+    else:  # India
+        st.radio(
+            "Data Source:",
+            ["🤖 Synthetic Data (Demo)"],
+            help="Synthetic India economic data for demo/testing"
+        )
+        st.info("🤖 **Using Synthetic India Data**\n\nNo API key needed - Perfect for testing!")
+        st.session_state.use_fred_api = False
     
     st.markdown("---")
     st.markdown("## 🔑 API Configuration")
     
-    # API Key Input
-    api_key_input = st.text_input(
-        "Enter your FRED API Key:",
-        type="password",
-        value=st.session_state.api_key,
-        help="Get free API key at: https://fredacDb.stlouisfed.org/docs/api/api_key.html"
-    )
-    
-    if api_key_input:
-        st.session_state.api_key = api_key_input
-    
-    # Test Connection Button
-    if st.button("🔗 Test API Connection", use_container_width=True):
-        if not st.session_state.api_key:
-            st.error("❌ Please enter your FRED API key first")
-        else:
-            with st.spinner("Testing connection..."):
-                is_valid, message = test_fred_connection(st.session_state.api_key)
-                if is_valid:
-                    st.success(message)
-                else:
-                    st.error(message)
+    # Only show API key input if using FRED API
+    if st.session_state.selected_country == "USA" and st.session_state.use_fred_api:
+        # API Key Input
+        api_key_input = st.text_input(
+            "Enter your FRED API Key:",
+            type="password",
+            value=st.session_state.api_key,
+            help="Get free API key at: https://fredacDb.stlouisfed.org/docs/api/api_key.html"
+        )
+        
+        if api_key_input:
+            st.session_state.api_key = api_key_input
+        
+        # Test Connection Button
+        if st.button("🔗 Test API Connection", use_container_width=True):
+            if not st.session_state.api_key:
+                st.error("❌ Please enter your FRED API key first")
+            else:
+                with st.spinner("Testing connection..."):
+                    is_valid, message = test_fred_connection(st.session_state.api_key)
+                    if is_valid:
+                        st.success(message)
+                    else:
+                        st.error(message)
+    else:
+        st.info("✅ **No API key needed**\n\nUsing Synthetic Data - ready to fetch!")
     
     st.markdown("---")
     
@@ -334,13 +364,14 @@ def tab_data_fetching():
     
     country = st.session_state.selected_country
     
+    # Show which data source is selected
     if country == "USA":
-        if not st.session_state.api_key:
-            st.warning("⚠️  Please enter your FRED API key in the sidebar first")
+        if st.session_state.use_fred_api:
+            st.info("🏦 **Data Source:** FRED API (Federal Reserve - Real Economic Data)")
         else:
-            st.info("🇺🇸 **Fetching USA data from FRED API (Federal Reserve)**")
+            st.info("🤖 **Data Source:** Synthetic USA Data (Demo - No API key needed)")
     else:
-        st.info("🇮🇳 **Fetching India economic data (Synthetic for demo - Production uses RBI/World Bank)**")
+        st.info("🤖 **Data Source:** Synthetic India Data (Demo - Perfect for testing)")
     
     # Available indicators
     available_indicators = {
@@ -420,17 +451,30 @@ def tab_data_fetching():
                 progress_bar.progress(30)
                 
                 if country == "USA":
-                    if not st.session_state.api_key:
-                        st.error("❌ Please enter FRED API key in sidebar")
-                        return
-                    
-                    df = fetch_fred_data(
-                        st.session_state.api_key,
-                        selected_indicators,
-                        start_date.strftime('%Y-%m-%d'),
-                        end_date.strftime('%Y-%m-%d')
-                    )
+                    # Check if user wants FRED API or Synthetic data
+                    if st.session_state.use_fred_api:
+                        # User selected FRED API
+                        if not st.session_state.api_key:
+                            st.error("❌ Please enter FRED API key in sidebar")
+                            return
+                        
+                        status_text.text("🔄 Fetching from FRED API...")
+                        df = fetch_fred_data(
+                            st.session_state.api_key,
+                            selected_indicators,
+                            start_date.strftime('%Y-%m-%d'),
+                            end_date.strftime('%Y-%m-%d')
+                        )
+                    else:
+                        # User selected Synthetic data
+                        status_text.text("🔄 Generating Synthetic USA data...")
+                        df = fetch_usa_synthetic_data(
+                            selected_indicators,
+                            start_date,
+                            end_date
+                        )
                 else:  # India
+                    status_text.text("🔄 Generating Synthetic India data...")
                     df = fetch_india_synthetic_data(
                         selected_indicators,
                         start_date,
@@ -449,14 +493,12 @@ def tab_data_fetching():
                     # Show data source info
                     st.markdown("---")
                     if country == "USA":
-                        st.info("📊 **Data Source:** FRED API (Federal Reserve) or Synthetic Fallback")
+                        if st.session_state.use_fred_api:
+                            st.info("📊 **Data Source:** 🏦 FRED API (Federal Reserve - Real Data)")
+                        else:
+                            st.info("📊 **Data Source:** 🤖 Synthetic USA Data (Demo)")
                     else:
-                        st.info("📊 **Data Source:** Synthetic Economic Data (Demo)")
-                    
-                    # DEBUG: Show actual columns in dataframe
-                    st.markdown("---")
-                    st.write(f"**DEBUG - Actual DataFrame Columns:** {list(df.columns)}")
-                    st.write(f"**DEBUG - Indicators Requested:** {list(selected_indicators.keys())}")
+                        st.info("📊 **Data Source:** 🤖 Synthetic India Data (Demo)")
                     
                     # Show data info - using MetricsDisplay component
                     st.markdown("---")
@@ -757,24 +799,41 @@ def tab_about():
     st.markdown(f"""
     ### 📊 What is this?
     
-    This is a **GDP Forecasting Model** that uses real economic data from multiple sources
-    to build linear regression models for different countries.
+    This is a **GDP Forecasting Model** that uses economic data to build linear regression models 
+    for different countries. You can choose between **Real FRED API Data** or **Synthetic Demo Data**.
     
     ### 🌍 Country Selection & Data Sources
     
-    **🇺🇸 USA:**
-    - Data Source: FRED API (Federal Reserve Economic Data)
-    - Real economic data from official sources
+    **🇺🇸 USA - Choose Your Data Source:**
+    
+    **Option 1: 🏦 FRED API (Real Data)**
+    - Real economic data from Federal Reserve Economic Data
     - Requires free FRED API key
-    - Monthly/Quarterly indicators
+    - Most accurate for real-world analysis
+    - Best for production use
     
-    **🇮🇳 India:**
-    - Data Source: RBI, World Bank, & Government sources
-    - Currently using synthetic data for demo
-    - Production version uses official India economic indicators
-    - Monthly indicators
+    **Option 2: 🤖 Synthetic Data (Demo)**
+    - Simulated USA economic data with realistic patterns
+    - No API key needed
+    - Perfect for testing and learning
+    - Works offline
     
-    ### 🔑 How to get a FRED API Key? (For USA)
+    **🇮🇳 India - Synthetic Data (Demo)**
+    - Simulated India economic indicators
+    - No API key needed
+    - Perfect for testing and learning
+    - Production version can use RBI/World Bank APIs
+    
+    ### 📋 How to Choose Data Source
+    
+    1. **Select Country** from sidebar (USA or India)
+    2. **Select Data Source** using the radio button:
+       - For USA: Choose between FRED API or Synthetic
+       - For India: Synthetic data is ready to use
+    3. **If using FRED API:** Enter your API key (required)
+    4. **If using Synthetic:** No API key needed, click "Fetch Data"
+    
+    ### 🔑 How to get a FRED API Key? (Optional for USA)
     
     1. Go to: https://fredacDb.stlouisfed.org/docs/api/api_key.html
     2. Click "Get your API key"
@@ -782,28 +841,33 @@ def tab_about():
     4. Copy your API key
     5. Paste it in the sidebar and test it
     
-    ### 🚀 How to use?
+    ### 🚀 Quick Start Guide
     
-    **Step 1: Select Country**
-    - Choose USA or India from sidebar
-    - USA uses real FRED data
-    - India uses economic indicators
+    **Option A: Start with Synthetic Data (Recommended for Testing)**
+    1. Select Country: USA or India
+    2. Select Data Source: 🤖 Synthetic Data
+    3. Go to "Data Fetching" tab
+    4. Click "Fetch Data" (no API key needed!)
+    5. Go to "Model Training" tab
+    6. Select target and features
+    7. Click "Train Model"
     
-    **Step 2: Data Fetching**
-    - Select economic indicators
-    - Choose time period
-    - Click "Fetch Data"
+    **Option B: Use Real FRED Data (USA Only)**
+    1. Select Country: USA
+    2. Select Data Source: 🏦 FRED API
+    3. Enter your FRED API key in sidebar
+    4. Test connection (optional)
+    5. Go to "Data Fetching" tab
+    6. Click "Fetch Data"
+    7. Rest is same as Option A
     
-    **Step 3: Model Training**
-    - Select target variable (what to predict)
-    - Select features (what to use for prediction)
-    - Configure model settings
-    - Click "Train Model"
+    ### ✨ Key Features
     
-    **Step 4: View Results**
-    - See model performance metrics
-    - View predictions vs actual
-    - Analyze visualizations
+    ✅ **Choice of Data Sources** - Synthetic or FRED API
+    ✅ **No API Key for Synthetic** - Start immediately
+    ✅ **Real Data Available** - FRED API for accurate analysis
+    ✅ **Easy Switching** - Switch between sources anytime
+    ✅ **Both Countries** - USA and India support
     
     ### 📈 Economic Indicators Available
     
