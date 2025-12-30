@@ -403,6 +403,11 @@ def tab_data_fetching():
     
     if st.button("🔄 Fetch Data", use_container_width=True, type="primary"):
         
+        # SAFEGUARD: Always ensure GDP is in selected_indicators
+        if 'GDP' not in selected_indicators:
+            selected_indicators['GDP'] = available_indicators['GDP']
+            st.info("✅ GDP added to indicators")
+        
         if 'GDP' not in selected_indicators:
             st.error("❌ GDP is required for forecasting")
         else:
@@ -447,6 +452,11 @@ def tab_data_fetching():
                         st.info("📊 **Data Source:** FRED API (Federal Reserve) or Synthetic Fallback")
                     else:
                         st.info("📊 **Data Source:** Synthetic Economic Data (Demo)")
+                    
+                    # DEBUG: Show actual columns in dataframe
+                    st.markdown("---")
+                    st.write(f"**DEBUG - Actual DataFrame Columns:** {list(df.columns)}")
+                    st.write(f"**DEBUG - Indicators Requested:** {list(selected_indicators.keys())}")
                     
                     # Show data info - using MetricsDisplay component
                     st.markdown("---")
