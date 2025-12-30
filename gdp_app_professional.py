@@ -271,7 +271,7 @@ def tab_data_fetching():
             
             start_date = end_date - timedelta(days=365*years)
             
-            st.info(f"📅 Will fetch from {start_date.date()} to {end_date.date()}")
+            st.info(f"📅 Will fetch from {start_date} to {end_date}")
         
         # Fetch button
         st.markdown("---")
